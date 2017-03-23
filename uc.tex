@@ -1,0 +1,210 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{tikz}
+
+\title{Mikrokontrollerlab i Linux}
+\author{TTK4235 Tilpassede Datasystemer}
+\date{}
+
+\renewcommand{\figurename}{Figur}
+\renewcommand{\lstlistingname}{Kodesnutt}
+\lstset{language=C, frame=single}
+
+\begin{document}
+\maketitle
+\section{Bakgrunn}
+\subsection{Læringsutbytte}
+Denne laben er delt i tre deler, som hver skal gi en introduksjon til innvevde datasystemer, som mikrokontrollere. Del 1 vil introdusere dere til mikrokontroller IO og kommunikasjon mellom datamaskin og mikrokontroller via USART\footnote{Universal Synchronous/Asynchronous Receiver/Transmitter}. Del 2 vil ta for seg lesing av analoge signaler via en Analog/Digital-omformer (ADC). Del 3 vil bruke joysticken på kortet til å kontrollere en servomotor via PWM.
+
+\subsection{Datablad}
+For å få en mikrokontroller til å gjøre noe interessant setter man verdier i interne registre (via \textit{software}), som igjen dikterer hvordan \textit{hardware} vil oppføre seg. For å finne hvilke registre man skal sette, tar man en titt i mikrokontrollerens datablad; der står som regel alt man trenger å vite. Haken er selvsagt at datablad er svære beist som lett kan vokse seg over tusen sider, og vel så det. Derfor er det viktig å kunne finne frem til det man trenger av informasjon, slik at man unngår et nervøst sammenbrudd på lab. Heldigvis har datablader gode innholdsfortegnelser, og i Atmels tilfelle også en nyttig \textbf{registeroversikt} på slutten av hvert kapittel. Bruk denne oversikten flittig!\\
+\\
+Datablad for mikrokontrolleren brukt i denne laben (AT90USB1287) ligger på it's learning, men kan også finnes på Atmel sine sider.
+
+\subsection{Linux vs. Windows}
+Dere kan selv velge om dere vil bruke Windows eller Linux i denne laben. Stort sett kan forskjellene oppsummeres som i figur \ref{Win::vs:Linux}: På Windows håndterer Atmel Studio alt, mens i Linux er det fritt frem.
+\begin{figure}
+\centering
+\begin{tikzpicture}
+\node at (2,3) {\Large Windows:};
+\path[draw, fill = blue!15] (0,0.5) rectangle (4,2.5) node[midway]{\verb!Atmel Studio!};
+% uC
+\foreach \x in {0.5,1,1.5}{
+\path[draw, ultra thick] (8 + \x, 0.7) -- ++(0,1.6);
+}
+\path[draw, fill=blue!15] (8,1) rectangle ++(2,1) node[midway]{$\mu $C};
+\path[draw, ->, ultra thick] (4,1.5) -- ++(4,0);
+
+\begin{scope}[xshift=-0.5cm]
+\begin{scope}[yshift = -5cm]
+\node at (2.5,3) {\Large Linux:};
+\path[draw, fill = blue!15] (0,0.5) rectangle ++(2,2) node[midway]{\verb!Code!};
+\path[draw, fill = blue!15] (3,0.5) rectangle ++(2,2) node[midway]{\verb!Compile!};
+\path[draw, fill = blue!15] (6,0.5) rectangle ++(2,2) node[midway]{\verb!Copy!};
+\begin{scope}[xshift=1cm]
+% uC
+\foreach \x in {0.5,1,1.5}{
+\path[draw, ultra thick] (8 + \x, 0.7) -- ++(0,1.6);
+}
+\path[draw, fill=blue!15] (8,1) rectangle ++(2,1) node[midway]{$\mu $C};
+\end{scope}
+\path[draw,->, thick] (2,1.5) -- ++(1,0);
+\path[draw,->, thick] (5,1.5) -- ++(1,0);
+\path[draw,->, thick] (8,1.5) -- ++(1,0);
+\end{scope}
+\end{scope}
+\end{tikzpicture}
+\caption{Windows workflow vs. Linux workflow.}
+\label{Win::vs:Linux}
+\end{figure}
+Altså er koden og sluttresultatet likt, men om man velger Windows er man mer eller mindre låst til Atmel Studio. I Linux har man større valgmulighet - er man misfornøyd med ett av stegene involvert; står man fritt til å velge annen software som gjør samme jobb.\\
+Den viktigste forskjellen er at man står fritt til å velge tekstredigeringsprogram. Hvis man er kjent med for eksempel Vim eller Emacs, er det ingen grunn til å lide under Atmel Studios klønete IDE.
+\subsection{Ærlige ord basert på erfaring}
+Innvevde datasystemer, eller \textit{embedded computers}, er vanskelig å komme inn i første gang. Mest sannsynlig kommer dere til å hate livet litt før dere blir kjent med databladet, og før dere kommer inn i \textit{mikrokontrollerparadigmet}. Dette er helt normalt, så fortvil ikke.\\
+Laben blir ganske kul i del 3 - da faller delene på plass :)
+\section{Utstyr}
+\subsection{Hardware}
+På starten av hver lab får dere utlevert en eske med utstyr. Denne skal inn igjen på slutten av hver lab.
+\subsection{Software}
+Ta vare på deres egen kode - ikke bare lagre på en lokal datamaskin og gå. Google Drive kan funke, men \href{https://git-scm.com/}{git} kombinert med \href{https://github.com/}{github} anbefales. Mange av dere er allerede kjent med git fra heisprosjektet, men om dere trenger en rask innføring kan det være lurt å ta en titt på \href{http://gitimmersion.com/}{gitimmersion.com}.
+\section{Oppsett av labutstyr}
+\subsection{Hardware}
+\label{Setup::Hardware}
+P1000-kortet som brukes i denne laben (figur \ref{p1000::card}) kan trekke strøm både fra klemmene oppe i høyre hjørne, i tillegg til USB-koblingen i høyre kant. I denne laben bruker vi USB.\\
+\\
+Programmering av kortet forgår via JTAG. Tidligere år har brukt en annen debugger enn det vi gjør nå, så figuren i Windows-laboppgaven er litt feil. Ta utgangspunkt i figur \ref{JTAG::conn}.
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\linewidth]{jtag.jpg}
+\caption{Kobling av debugger til P1000-kortet.}
+\label{JTAG::conn}
+\end{figure}
+\subsection{Software}
+Dere som har valgt Linux velger fritt hvilket tekstredigeringsprogram dere ønsker å benytte. Resten av \textit{toolchainen} har vi satt opp for dere, men hvis dette er første labdag kan det hende dere må laste ned \textit{avrdude}, \textit{avr-gcc} og \textit{avr-libc}. Dette gjøres ved å kalle\\
+\\
+\centerline{\textbf{sudo add-apt-repository ppa:ubuntuhandbook1/apps}}
+\centerline{\textbf{sudo apt-get update}}
+\centerline{\textbf{sudo apt-get install -y avrdude gcc-avr avr-libc}}\\
+\\
+fra kommandolinjen.\\
+\\
+Når dette er gjort lager dere en ny mappe der dere laster ned \textit{Makefilen} fra it's learning til. Denne fungerer på samme måte som den gjorde i heisprosjektet - bare kall \textbf{make} fra kommandolinjen, så ordner \textit{gnu-make} resten.
+\begin{figure}[!h]
+\centering
+\includegraphics[width=0.8\linewidth]{p1000.png}
+\caption{P1000-kort med Atmel AT90USB1287-prosessor.}
+\label{p1000::card}
+\end{figure}
+\section{Oppgave 1}
+Koble opp kortet som beskrevet i seksjon \ref{Setup::Hardware}. Deretter kobler dere den medfølgende flatkabelen mellom \textit{PORTB} og \textit{LEDS/SW}, som indikert i figur \ref{PORTB::LEDS}. Det er viktig at den røde ledningen på flatkabelen vender i samme retning på de to tilkoblingspunktene (for eksempel til høyre hos både \textit{PORTB} og \textit{LEDS/SW}).
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.8\linewidth]{portb_leds.png}
+\caption{Koblingspunkt av flatkabel.}
+\label{PORTB::LEDS}
+\end{figure}
+Deretter skal dere teste P1000-kortet ved å laste opp filen \textit{example.hex} som finnes på it's learning. Dette gjøres simpelthen ved å kalle \textbf{make test} fra mappen med \textit{example.hex}.\\
+Når dette er gjort skal de fire LEDene (LED0-3) til høyre på kortet blinke etter hverandre. Hvis dette ikke skjer, så huk tak i en studass.
+\subsection{Knapper og LEDer}
+Dere skal bruke de fire knappene til høyre på kortet til å sette av og på tilhørende lys. Lag en fil kalt \textit{main.c}. I toppen av denne inkluderer dere biblioteket \textit{avr/io} ved å skrive \textbf{\#include} $<$\textbf{avr/io.h}$>$.\\
+\\
+Videre skal main-filen inneholde følgende funksjoner:
+\begin{itemize}
+\item void init\_led()
+\item void init\_switch()
+\item void set\_led(int n, int v)
+\item int read\_switch(int n)
+\end{itemize}
+Her skal $n$ være et tall mellom 0 og 3, som bestemmer hvilken knapp/led vi snakker om. I set\_led skal $v$ være enten 0 eller 1, som bestemmer om det skal lyse eller ikke.\\
+De to init-funksjonene skal sette nødvendige IO-registre før set\_led og read\_switch kalles. Alt dere trenger står i databladet under kapittel 11. Spesielt kapittel 11.1 og 11.2.1.
+\subsubsection{Hint}
+\begin{enumerate}
+\item Både knappene og LEDene er koblet til PORTB på mikrokontrolleren. Knappene er koblet til pinne 1, 3, 5, 7. LEDene er koblet til pinne 0, 2, 4, 6.
+\item LEDene er koblet i såkalt \textit{sinking mode}. Det vil si at de lyser når 0 er skrevet til pinnene i PORTB. \textit{Sourcing mode} er det motsatte.
+\item Ta en titt på appendiks \ref{Bitwise::in::C} for å se hvordan vi gjør bitvis operasjoner som å sette enkelte bit i C. Særlig i kodesnutt \ref{code::names} er det tips å hente.
+\end{enumerate}
+\subsection{USART - Serieport}
+UART og USART, som står for \textbf{U}niversal (\textbf{S}ynchronous) \textbf{A}synchronous \textbf{R}eceiver \textbf{T}ransmitter, er to forkortelser som brukes litt om hverandre. Dette gjøres mest sannsynlig for å forvirre de uinnvidde.\\
+Uansett årsak skal vi bruke UART til å kommunisere med datamaskinen. Koble pinne 1 på UART BRIDGE til pinne 4 på PORTD, og pinne 2 på UART BRIDGE til pinne 3 på PORTD. Se figur \ref{UART::PORTD}.
+\begin{figure}[hb]
+\centering
+\includegraphics[width=0.8\linewidth]{uart_portd.png}
+\caption{Kobling UART BRIDGE og PORTD.}
+\label{UART::PORTD}
+\end{figure}
+Etter dette oppretter dere filene \textit{usart.c} og \textit{usart.h}. To funksjoner skal implementeres:
+\begin{itemize}
+\item int init\_usart(int baudrate);
+\item int usart\_putchar(char c);
+\end{itemize}
+Baudrate betyr hvor mange bit vi sender hvert sekund. Init-funksjonen skal bare sette opp nødvendige register. Funksjonen usart\_putchar skal først sjekke om det er klart for å sende, for så å dytte bokstaven $c$ over seriekabelen.\\
+\\
+Bruk følgende oppsett:
+\begin{itemize}
+\item Baudrate 19200.
+\item Asynkron overføring.
+\item Ingen paritetsbit.
+\item Symbolstørrelse på 8 bit.
+\end{itemize}
+Alt dere trenger står i kapittel 19 i databladet, men hvis dere vil ha noe som kanskje er mer lettfattelig, så ta en titt på \href{http://extremeelectronics.co.in/avr-tutorials/using-the-usart-of-avr-microcontrollers/}{extremeelectronics.co.in}.\\
+\\
+Når dere er klare for å teste kobler dere P1000-kortet til datamaskinens øverste DSUB9-port. Etterpå kaller dere \textbf{dmesg} fra terminalen. En av de nederste linjene burde fortelle hvor P1000-kortet ligger registrert - for eksempel under \textit{/dev/ttyS0}. Når dere har funnet ut hvor kortet ligger, kaller dere \textbf{sudo stty -F /dev/ttyS0 19200} (dersom det ble lagt til som ttyS0), etterfulgt av \textbf{cat /dev/ttyS0}. Hvis dere får bokstaver fra P1000-kortet har dere greid oppgaven.
+\subsubsection{Hint}
+\begin{enumerate}
+\item Mikrokontrolleren kjører på 16 MHz, legg til \textbf{\#define F\_CPU 16000000UL} i toppen av \textit{uart.c}.
+\item Det er lurt å sende '\textbackslash r' etterfulgt av '\textbackslash n' for å avslutte linjer sendt fra mikrokontrolleren.
+\end{enumerate}
+
+\appendix
+\section{Bitoperasjoner i C}
+\label{Bitwise::in::C}
+C har følgende bitvise operatorer:
+\begin{itemize}
+\item[\&] - Bitvis \textbf{og}
+\item[\textbar] - Bitvis \textbf{eller}
+\item[\textasciicircum] - Bitvis \textbf{XOR} (exclusive or)
+\item[\textasciitilde] - Bitvis \textbf{ikke} (not)
+\item[$<<$] - Venstreskift
+\item[$>>$] - Høyreskift
+\end{itemize}
+Et eksempel på hvordan disse operatorene virker er gitt i kodesnutt \ref{code::bitwise}. Du forstår best hvordan koden i snutt \ref{code::bitwise} fungerer hvis du skriver opp eksemplene selv og gjør de for hånd!
+\begin{lstlisting}[caption=Bitvise operatorer i C.,label=code::bitwise]
+// Prefix 0b means number in binary
+char a = 0b10101010;
+char b = 0b11110000;
+char c;
+
+c = a | b;		// c is now 0b11111010
+c = a & b;		// c is now 0b10100000
+c = b >> 2;		// c is now 0b00111100
+c = a ^ b;		// c is now 0b01011010
+c = ~b;			// c is now 0b00001111
+\end{lstlisting}
+Når vi programmerer mikrokontrollere setter vi ofte ett enkelt bit på eller av i et register. Dette gjøres ofte på følgende måte:
+\begin{lstlisting}[caption=Setting av enkelte bit.,label=code::setting]
+char c = 0b10000001;
+
+// To set bit 3 from right side, we do:
+c |= (1 << 2);		// c is now 0b10000101
+
+// To clear it agin, we do:
+c &= ~(1 << 2);		// c is now 0b10000001
+\end{lstlisting}
+Igjen: Du lærer hvordan koden i snutt \ref{code::setting} fungerer ved å gå gjennom den for hånd.\\
+\\
+På mikrokontrolleren brukt i denne laben er registrene 8 bit, og kan fint settes på måten vi gjorde i kodesnutt \ref{code::setting}. Dette er imidlertid bare tull, fordi koden blir helt uoversiktlig. For å gjøre jobben din enklere har hvert register og hvert bit i hvert register sitt eget navn. Disse navnene er definert i biblioteket \textit{avr/io}. Slik bruker vi det:
+\begin{lstlisting}[caption=Bruk av registernavn.,label=code::names]
+#include <avr/io.h>
+...
+
+// To set bit PB0 in DDRB
+DDRB |= (1 << PB0);
+
+// To clear bit PB0 in PORTB
+PORTB &= ~(1 << PB0);
+\end{lstlisting}
+I kodesnutt \ref{code::names} demonstrerer vi hvordan vi setter pinne 0 i \textbf{D}ata-\textbf{D}irection-\textbf{R}egister-\textbf{B}, slik at pinne 0 blir satt i \textit{output}-modus. Deretter skrur vi av pinne 0 i PORTB, slik at pinnen er logisk lav.
+\end{document}
