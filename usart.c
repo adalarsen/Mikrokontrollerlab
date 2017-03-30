@@ -1,7 +1,9 @@
 #include "usart.h"
 #include <avr/io.h>
+#include <stdio.h>
 #define F_CPU_16000000UL
 
+static FILE usart_stdout = FDEV_SETUP_STREAM(usart_putchar, NULL, _FDEV_SETUP_WRITE);
 
 
 
@@ -13,7 +15,8 @@ int init_usart(int baudrate) {
     //    DDRD |= (1 << PD0);
   //  DDRD |= (1 << PD1);
    // DDRD |= (1 << PD2);
-    //DDRD |= (1 << PD3);
+   //DDRD |= (1 << PD3);
+    stdout = &usart_stdout;
     return 1;
 }
 

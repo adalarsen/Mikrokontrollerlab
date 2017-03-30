@@ -1,6 +1,8 @@
 #include <avr/io.h>
 #include <stdio.h>
 #include "usart.h"
+#include "adc.h"
+
 
 void init_led() {
    //sett io-registre
@@ -64,14 +66,16 @@ int read_switch(int n) {
 }
 
 int main(){
+    
     init_led();
     init_switch();
     init_usart(51);
-
+    
     //DDRB |= (1 << PB0);
     set_led(3,0);
     set_led(1,1);
     set_led(0,1);
+    init_adc();
     while(1) { 
         int n = read_switch(2);
         if (n) {
@@ -82,6 +86,14 @@ int main(){
         usart_putchar('p');
         usart_putchar('\r');
         usart_putchar('\n');
+        usart_putchar('x');    
+    
+        int ycoord = adc_read('Y');
+        int xcoord = adc_read('X');
+        ycoord = (ycoord - 512)/5.12;
+        xcoord = (xcoord - 512)/5.12;
+        printf("xcoord: %d, ycoord: %d \r \n", xcoord, ycoord);
+        usart_putchar('v');
     }
     return 0;
 }
